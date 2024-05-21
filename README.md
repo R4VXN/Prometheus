@@ -167,7 +167,7 @@ Create a test text file to ensure Node Exporter collects the metrics correctly.
 2. Then check if the metric is available in Prometheus by browsing the metrics page of Node Exporter:
 
     ```bash
-    curl http://localhost:9100/metrics | grep test_metric
+    curl http://localhost:9100/metrics | grep osupdates_exporter.sh
     ```
 
 With these steps, you should be able to successfully modify the Node Exporter configuration and use custom metrics.
