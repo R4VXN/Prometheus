@@ -1,49 +1,49 @@
 
-# Änderung der Node Exporter Konfiguration und Erstellung benutzerdefinierter Metriken für Linux Server Updates mit dnf yum und apt
+# Instructions for Modifying Node Exporter Configuration and Creating Custom Metrics
 
-## Ziel
+## Objective
 
-Ändern der Konfiguration des Node Exporters, um den Parameter `--collector.textfile.directory` hinzuzufügen und benutzerdefinierte Metriken (`os_pending_updates` und `os_pending_updates_list`) zu erstellen, die aus Textdateien in einem bestimmten Verzeichnis gesammelt werden.
+Modify the configuration of Node Exporter to add the `--collector.textfile.directory` parameter and create custom metrics (`os_pending_updates` and `os_pending_updates_list`) collected from text files in a specific directory.
 
-## Ändern der ExecStart-Zeile mit sed
+## Modifying the ExecStart Line with sed
 
-Sie können die Konfigurationsdatei des Node Exporters direkt mit dem `sed`-Befehl bearbeiten, um den Pfad für das Textdateiverzeichnis hinzuzufügen. Dieser Ansatz ist besonders nützlich, wenn Sie diese Änderung automatisieren oder auf mehreren Systemen gleichzeitig durchführen möchten.
+You can directly edit the Node Exporter configuration file using the `sed` command to add the path for the text file directory. This approach is particularly useful if you want to automate this change or apply it across multiple systems simultaneously.
 
-1. Öffnen Sie eine Terminal-Sitzung auf dem Server, auf dem der Node Exporter installiert ist.
+1. Open a terminal session on the server where Node Exporter is installed.
 
-2. Sichern Sie die bestehende Systemd-Dienstdatei, bevor Sie Änderungen vornehmen:
+2. Back up the existing systemd service file before making changes:
 
     ```bash
     sudo cp /etc/systemd/system/node_exporter.service /etc/systemd/system/node_exporter.service.bak
     ```
 
-3. Verwenden Sie `sed`, um die ExecStart-Zeile zu ändern. Dieser Befehl sucht nach der Zeile, die `ExecStart=/usr/local/bin/node_exporter` enthält, und fügt den Parameter `--collector.textfile.directory=/var/lib/node_exporter` hinzu:
+3. Use `sed` to modify the ExecStart line. This command searches for the line containing `ExecStart=/usr/local/bin/node_exporter` and adds the `--collector.textfile.directory=/var/lib/node_exporter` parameter:
 
     ```bash
     sudo sed -i 's|ExecStart=/usr/local/bin/node_exporter|ExecStart=/usr/local/bin/node_exporter --collector.textfile.directory=/var/lib/node_exporter|' /etc/systemd/system/node_exporter.service
     ```
 
-4. Laden Sie den Systemd-Daemon neu, um die Änderungen zu erkennen:
+4. Reload the systemd daemon to recognize the changes:
 
     ```bash
     sudo systemctl daemon-reload
     ```
 
-5. Starten Sie den Node Exporter neu, um die Konfigurationsänderungen zu übernehmen:
+5. Restart Node Exporter to apply the configuration changes:
 
     ```bash
     sudo systemctl restart node_exporter
     ```
 
-6. Überprüfen Sie den Status des Node Exporter Dienstes, um sicherzustellen, dass er ohne Fehler läuft:
+6. Check the status of the Node Exporter service to ensure it is running without errors:
 
     ```bash
     sudo systemctl status node_exporter
     ```
 
-## Skript zur Erstellung benutzerdefinierter Metriken erstellen
+## Creating a Script for Custom Metrics
 
-Erstellen Sie ein Skript namens `osupdates_exporter.sh` im Verzeichnis `/opt/scripts/` mit folgendem Inhalt:
+Create a script named `osupdates_exporter.sh` in the `/opt/scripts/` directory with the following content:
 
 ```bash
 #!/bin/bash
@@ -128,46 +128,46 @@ fi
 
 ```
 
-## Skript ausführbar machen
+## Making the Script Executable
 
-Stellen Sie sicher, dass das Skript ausführbar ist:
+Ensure the script is executable:
 
 ```bash
 sudo chmod +x /opt/scripts/osupdates_exporter.sh
 ```
 
-## Cron-Job einrichten
+## Setting Up a Cron Job
 
-Richten Sie einen Cron-Job ein, der das Skript regelmäßig ausführt, um die Metriken zu aktualisieren.
+Set up a cron job to run the script regularly to update the metrics.
 
-1. Öffnen Sie die Crontab-Konfiguration:
+1. Open the crontab configuration:
 
     ```bash
     crontab -e
     ```
 
-2. Fügen Sie folgende Zeile hinzu, um das Skript alle 5 Minuten auszuführen:
+2. Add the following line to run the script every 5 minutes:
 
     ```bash
     */5 * * * * /opt/scripts/osupdates_exporter.sh
     ```
 
-## Überprüfen der neuen Konfiguration
+## Verifying the New Configuration
 
-Erstellen Sie eine Test-Textdatei, um sicherzustellen, dass der Node Exporter die Metriken korrekt sammelt.
+Create a test text file to ensure Node Exporter collects the metrics correctly.
 
-1. Erstellen Sie eine Test-Textdatei:
+1. Create a test text file:
 
     ```bash
-    echo '# HELP test_metric Dies ist eine Testmetrik' > /var/lib/node_exporter/test.prom
+    echo '# HELP test_metric This is a test metric' > /var/lib/node_exporter/test.prom
     echo '# TYPE test_metric gauge' >> /var/lib/node_exporter/test.prom
     echo 'test_metric 42' >> /var/lib/node_exporter/test.prom
     ```
 
-2. Überprüfen Sie dann, ob die Metrik in Prometheus verfügbar ist, indem Sie die Metrikseite des Node Exporters durchsuchen:
+2. Then check if the metric is available in Prometheus by browsing the metrics page of Node Exporter:
 
     ```bash
     curl http://localhost:9100/metrics | grep test_metric
     ```
 
-Mit diesen Schritten sollten Sie die Konfiguration des Node Exporters erfolgreich ändern und die benutzerdefinierten Metriken nutzen können.
+With these steps, you should be able to successfully modify the Node Exporter configuration and use custom metrics.
