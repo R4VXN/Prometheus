@@ -1,5 +1,5 @@
 
-# Anleitung zur Änderung der Node Exporter Konfiguration und Erstellung benutzerdefinierter Metriken für Linux Server Updates mit dnf yum und apt
+# Änderung der Node Exporter Konfiguration und Erstellung benutzerdefinierter Metriken für Linux Server Updates mit dnf yum und apt
 
 ## Ziel
 
