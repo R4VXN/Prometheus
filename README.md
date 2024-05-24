@@ -74,13 +74,13 @@ process_apt() {
 # Function to process YUM
 process_yum() {
     yum makecache -q
-    updates=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v 'Obsoleting' | grep -v 'Security' | wc -l)
+    updates=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Obsoleting' -e 'Security' -e 'No packages marked for update' | wc -l)
     updates=$((updates / 3)) # Since yum check-update outputs 3 lines per update
     echo "# HELP os_pending_updates Number of pending updates"
     echo "# TYPE os_pending_updates gauge"
     echo "os_pending_updates $updates"
     if [ "$updates" -gt 0 ]; then
-        updates_list=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v 'Obsoleting' | grep -v 'Security' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
+        updates_list=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Obsoleting' -e 'Security' -e 'No packages marked for update' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
     else
         updates_list="No updates available"
     fi
@@ -97,7 +97,7 @@ process_dnf() {
     echo "# HELP os_pending_updates Number of pending updates"
     echo "# TYPE os_pending_updates gauge"
     echo "os_pending_updates $updates"
-    if [ "$updates" -gt 0 ]; then
+    if [ "$updates" -gt 0]; then
         updates_list=$(dnf check-update | grep -E '^[a-zA-Z0-9]' | grep -v "^Last metadata" | grep -v 'Security' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
     else
         updates_list="No updates available"
@@ -131,6 +131,7 @@ if ! grep -q "os_pending_updates_list" /var/lib/node_exporter/os_updates.prom; t
     echo "# TYPE os_pending_updates_list gauge" >> /var/lib/node_exporter/os_updates.prom
     echo "os_pending_updates_list{updates=\"No updates available\"} 0" >> /var/lib/node_exporter/os_updates.prom
 fi
+
 
 ```
 
