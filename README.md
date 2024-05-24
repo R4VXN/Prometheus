@@ -1,6 +1,12 @@
 
 # Instructions for Modifying Node Exporter Configuration and Creating Custom Metrics for yum dnf and apt Update metrics
 
+**Note:**
+
+*APT Packetmanager only filters for the English and German language.*
+
+*With DNF & Yum the OS language does not matter*
+
 ## Objective
 
 Modify the configuration of Node Exporter to add the `--collector.textfile.directory` parameter and create custom metrics (`os_pending_updates` and `os_pending_updates_list`) collected from text files in a specific directory.
