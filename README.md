@@ -133,6 +133,7 @@ if ! grep -q "os_pending_updates_list" /var/lib/node_exporter/os_updates.prom; t
 fi
 
 
+
 ```
 
 ## Making the Script Executable
