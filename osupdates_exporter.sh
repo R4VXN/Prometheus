@@ -77,3 +77,4 @@ if ! grep -q "os_pending_updates_list" /var/lib/node_exporter/os_updates.prom; t
     echo "# TYPE os_pending_updates_list gauge" >> /var/lib/node_exporter/os_updates.prom
     echo "os_pending_updates_list{updates=\"No updates available\"} 0" >> /var/lib/node_exporter/os_updates.prom
 fi
+
