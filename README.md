@@ -58,7 +58,6 @@ Create a script named `osupdates_exporter.sh` in the `/opt/scripts/` directory w
 process_apt() {
     echo "Starting apt-get update..."
     apt-get update -qq
-
     updates=$(apt list --upgradable 2>/dev/null | grep -v -e "^Listing..." -e "^Auflistung" -e "^$" | grep -e "/.*\[" | wc -l)
     echo "apt updates counted: $updates"
 
@@ -81,8 +80,7 @@ process_apt() {
 process_yum() {
     echo "Starting yum makecache..."
     yum makecache -q
-
-    updates=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Obsoleting' -e 'Security' -e 'No packages marked for update' | wc -l)
+    updates=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Obsoleting' -e 'Security' -e 'No packages marked for update' -e 'Last' | wc -l)
     echo "yum updates counted: $updates"
 
     {
@@ -90,7 +88,7 @@ process_yum() {
         echo "# TYPE os_pending_updates gauge"
         echo "os_pending_updates $updates"
         if [ "$updates" -gt 0 ]; then
-            updates_list=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Obsoleting' -e 'Security' -e 'No packages marked for update' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
+            updates_list=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Obsoleting' -e 'Security' -e 'No packages marked for update' -e 'Last' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
         else
             updates_list="No updates available"
         fi
@@ -104,8 +102,7 @@ process_yum() {
 process_dnf() {
     echo "Starting dnf makecache..."
     dnf makecache -q
-
-    updates=$(dnf check-update | grep -E '^[a-zA-Z0-9]' | grep -v "^Last metadata" | grep -v 'Security' | wc -l)
+    updates=$(dnf check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Security' -e 'Last metadata' -e 'Last' | wc -l)
     echo "dnf updates counted: $updates"
 
     {
@@ -113,7 +110,7 @@ process_dnf() {
         echo "# TYPE os_pending_updates gauge"
         echo "os_pending_updates $updates"
         if [ "$updates" -gt 0 ]; then
-            updates_list=$(dnf check-update | grep -E '^[a-zA-Z0-9]' | grep -v "^Last metadata" | grep -v 'Security' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
+            updates_list=$(dnf check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Security' -e 'Last metadata' -e 'Last' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
         else
             updates_list="No updates available"
         fi
@@ -143,8 +140,7 @@ if ! grep -q "os_pending_updates" /var/lib/node_exporter/os_updates.prom; then
 fi
 
 if ! grep -q "os_pending_updates_list" /var/lib/node_exporter/os_updates.prom; then
-    echo "# HELP os_pending_updates_list List of pending updates" >> /var/lib/node_exporter/os_updates.prom
-    echo "# TYPE os_pending_updates_list gauge" >> /var/lib/node_exporter/os_updates.prom
+    echo "# HELP os_pending_updates_list List of pending updates" >> /var/lib/node_export and "# TYPE os_pending_updates_list gauge" >> /var_lib/node_exporter/os_updates.prom
     echo "os_pending_updates_list{updates=\"No updates available\"} 0" >> /var_lib/node_exporter/os_updates.prom
 fi
 
