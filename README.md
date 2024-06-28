@@ -7,6 +7,9 @@
 
 *With DNF & Yum the OS language does not matter*
 
+
+*In the readme is not always the latest script please have a look at the osupdates_exporter.sh*
+
 ## Objective
 
 Modify the configuration of Node Exporter to add the `--collector.textfile.directory` parameter and create custom metrics (`os_pending_updates` and `os_pending_updates_list`) collected from text files in a specific directory.
