@@ -55,97 +55,119 @@ You can directly edit the Node Exporter configuration file using the `sed` comma
 Create a script named `osupdates_exporter.sh` in the `/opt/scripts/` directory with the following content:
 
 ```bash
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Function to process APT
-process_apt() {
-    echo "Starting apt-get update..."
+# Config
+OUTPUT_DIR="/var/lib/node_exporter"
+OUTPUT_FILE="${OUTPUT_DIR}/os_updates.prom"
+TMP_FILE="$(mktemp "${OUTPUT_DIR}/.os_updates.prom.XXXXXX")"
+
+# Cleanup on exit
+cleanup() {
+    rm -f "$TMP_FILE"
+}
+trap cleanup EXIT
+
+# Ensure output dir exists
+mkdir -p "$OUTPUT_DIR"
+
+# Escape function für Prometheus-Labels
+escape_label() {
+    local s="$1"
+    s="${s//\\/\\\\}"      # Backslashes
+    s="${s//\"/\\\"}"      # Anführungszeichen
+    s="${s//$'\n'/\\n}"    # Newlines
+    printf '%s' "$s"
+}
+
+# Ermittelt gelockte Pakete je Manager
+get_locked() {
+    local mgr="$1"
+    case "$mgr" in
+        apt)
+            apt-mark showhold 2>/dev/null || true
+            ;;
+        dnf)
+            # benötigt dnf-plugins-core
+            dnf versionlock list 2>/dev/null | awk '/^[0-9]/{print $2}' || true
+            ;;
+        yum)
+            # yum-plugin-versionlock
+            yum versionlock list 2>/dev/null | awk '/^[0-9]/{print $2}' || true
+            ;;
+        zypper)
+            # zypper locks list
+            zypper locks 2>/dev/null | awk -F' ' '/^  \(/ {print $2}' | sed 's/[()]//g' || true
+            ;;
+        *)
+            # unbekannt
+            ;;
+    esac
+}
+
+# Generic update checker
+# args: <manager> <update-cmd...>
+check_updates() {
+    local mgr="$1"; shift
+    local cmd=( "$@" )
+    local raw pkgs locked filtered count
+
+    # Updates abrufen
+    raw="$("${cmd[@]}" 2>/dev/null || echo '')"
+
+    # Alle Paketnamen extrahieren (eines pro Zeile)
+    mapfile -t pkgs < <(printf '%s\n' "$raw" | grep -E '^[[:alnum:]]' || true)
+    # Gelockte Pakete ermitteln
+    mapfile -t locked < <(get_locked "$mgr")
+    # Herausfiltern
+    if [ "${#locked[@]}" -gt 0 ]; then
+        for lp in "${locked[@]}"; do
+            pkgs=( "${pkgs[@]/$lp}" )
+        done
+    fi
+
+    # Anzahl und Metriken schreiben
+    count="${#pkgs[@]}"
+    {
+        echo "# HELP os_pending_updates Number of pending updates"
+        echo "# TYPE os_pending_updates gauge"
+        echo "os_pending_updates{manager=\"${mgr}\"} ${count}"
+        echo "# HELP os_pending_update_info Per-package pending update info"
+        echo "# TYPE os_pending_update_info gauge"
+        for pkg in "${pkgs[@]}"; do
+            [ -z "$pkg" ] && continue
+            pkg_esc="$(escape_label "$pkg")"
+            echo "os_pending_update_info{manager=\"${mgr}\",package=\"${pkg_esc}\"} 1"
+        done
+    } >> "$TMP_FILE"
+}
+
+# Detect distro und ausführen
+if command -v apt-get &>/dev/null; then
     apt-get update -qq
-    updates=$(apt list --upgradable 2>/dev/null | grep -v -e "^Listing..." -e "^Auflistung" -e "^$" | grep -e "/.*\[" | wc -l)
-    echo "apt updates counted: $updates"
-
-    {
-        echo "# HELP os_pending_updates Number of pending updates"
-        echo "# TYPE os_pending_updates gauge"
-        echo "os_pending_updates $updates"
-        if [ "$updates" -gt 0 ]; then
-            updates_list=$(apt list --upgradable 2>/dev/null | grep -v -e "^Listing..." -e "^Auflistung" -e "^$" | grep -e "/.*\[" | awk -F/ '{print $1}' | tr '\n' ',' | sed 's/,$//')
-        else
-            updates_list="No updates available"
-        fi
-        echo "# HELP os_pending_updates_list List of pending updates"
-        echo "# TYPE os_pending_updates_list gauge"
-        echo "os_pending_updates_list{updates=\"$updates_list\"} 0"
-    } > /var/lib/node_exporter/os_updates.prom
-}
-
-# Function to process YUM
-process_yum() {
-    echo "Starting yum makecache..."
-    yum makecache -q
-    updates=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Obsoleting' -e 'Security' -e 'No packages marked for update' -e 'Last' | wc -l)
-    echo "yum updates counted: $updates"
-
-    {
-        echo "# HELP os_pending_updates Number of pending updates"
-        echo "# TYPE os_pending_updates gauge"
-        echo "os_pending_updates $updates"
-        if [ "$updates" -gt 0 ]; then
-            updates_list=$(yum check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Obsoleting' -e 'Security' -e 'No packages marked for update' -e 'Last' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
-        else
-            updates_list="No updates available"
-        fi
-        echo "# HELP os_pending_updates_list List of pending updates"
-        echo "# TYPE os_pending_updates_list gauge"
-        echo "os_pending_updates_list{updates=\"$updates_list\"} 0"
-    } > /var/lib/node_exporter/os_updates.prom
-}
-
-# Function to process DNF
-process_dnf() {
-    echo "Starting dnf makecache..."
+    check_updates apt \
+        bash -c "apt list --upgradable 2>/dev/null | grep -vE '^(Listing|Auflistung|$)' | awk -F'/' '{print \$1}'"
+elif command -v dnf &>/dev/null; then
     dnf makecache -q
-    updates=$(dnf check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Security' -e 'Last metadata' -e 'Last' | wc -l)
-    echo "dnf updates counted: $updates"
-
-    {
-        echo "# HELP os_pending_updates Number of pending updates"
-        echo "# TYPE os_pending_updates gauge"
-        echo "os_pending_updates $updates"
-        if [ "$updates" -gt 0 ]; then
-            updates_list=$(dnf check-update | grep -E '^[a-zA-Z0-9]' | grep -v -e 'Security' -e 'Last metadata' -e 'Last' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
-        else
-            updates_list="No updates available"
-        fi
-        echo "# HELP os_pending_updates_list List of pending updates"
-        echo "# TYPE os_pending_updates_list gauge"
-        echo "os_pending_updates_list{updates=\"$updates_list\"} 0"
-    } > /var/lib/node_exporter/os_updates.prom
-}
-
-# Detect operating system and package manager
-if command -v apt &> /dev/null; then
-    process_apt
-elif command -v yum &> /dev/null; then
-    process_yum
-elif command -v dnf &> /dev/null; then
-    process_dnf
+    check_updates dnf \
+        bash -c "dnf check-update 2>/dev/null | grep -E '^[[:alnum:]]' | awk '{print \$1}'"
+elif command -v yum &>/dev/null; then
+    yum makecache -q
+    check_updates yum \
+        bash -c "yum check-update 2>/dev/null | grep -E '^[[:alnum:]]' | awk '{print \$1}'"
+elif command -v zypper &>/dev/null; then
+    zypper refresh -s >/dev/null
+    check_updates zypper \
+        bash -c "zypper list-updates | awk '/v |v /{print \$3}'"
 else
-    echo "No supported package manager found." >&2
+    echo "ERROR: Kein unterstützter Paketmanager gefunden." >&2
     exit 1
 fi
 
-# Ensure metrics are set to 0 if no updates are found
-if ! grep -q "os_pending_updates" /var/lib/node_exporter/os_updates.prom; then
-    echo "# HELP os_pending_updates Number of pending updates" >> /var/lib/node_exporter/os_updates.prom
-    echo "# TYPE os_pending_updates gauge" >> /var/lib/node_exporter/os_updates.prom
-    echo "os_pending_updates 0" >> /var/lib/node_exporter/os_updates.prom
-fi
+# Atomischer Austausch
+mv "$TMP_FILE" "$OUTPUT_FILE"
 
-if ! grep -q "os_pending_updates_list" /var/lib/node_exporter/os_updates.prom; then
-    echo "# HELP os_pending_updates_list List of pending updates" >> /var/lib/node_export and "# TYPE os_pending_updates_list gauge" >> /var_lib/node_exporter/os_updates.prom
-    echo "os_pending_updates_list{updates=\"No updates available\"} 0" >> /var_lib/node_exporter/os_updates.prom
-fi
 
 
 
